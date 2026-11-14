@@ -1,3 +1,69 @@
+# Nail AR
+
+*Nailed it. Built for Raven Prism.*
+
+Nail AR guides you through Daisy Dreams, Classic French, or Starry Night. It checks your supplies, illustrates each manicure step, and opens a gaze-controlled 9×9 Sudoku between manicure steps.
+
+## Install and launch
+
+Use Python 3.10+. Clone Nail AR and the Raven SDK into the same parent directory.
+
+```sh
+git clone https://github.com/jayasrisng/nail-AR.git
+git clone https://github.com/RavenResonance/raven-framework.git
+cd nail-AR
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python main.py --demo --narrate
+```
+
+On Windows, use `py -m venv .venv` and substitute `.venv\Scripts\python.exe` for `.venv/bin/python`. Launch from a desktop session so Qt can open the simulator. The simulator uses the cursor as eye gaze and clicks as selection.
+
+- `--demo` enables labeled sample inventory and sets the optional timer preset to 15 seconds. Live inventory scanning and cloud voice are disabled in this mode. The local camera preview is still available.
+- `--dry-seconds 120` sets an initial duration. **Drying Options** lets you select a preset or adjust it in 30-second increments. Start, pause, resume, or cancel the timer there. **Continue**, **Skip Wait**, and **Back** all leave a running timer intact.
+- A timer ending or being skipped does not determine whether polish is dry or cured. Use the product’s instructions, including the specified lamp for gel.
+- `--narrate` enables optional speech. macOS uses its built-in `say` for offline narration.
+- Press `/` to type a voice command, `Enter` to submit, or `Esc` to dismiss. `F2`, `F3`, and `F4` send Next, Back, and Repeat.
+
+## Live camera and voice
+
+Set `OPENAI_API_KEY` in your environment, then run `.venv/bin/python main.py --narrate`. Set `NAIL_AR_VISION_MODEL` if you want a different image-capable model. Grant camera and microphone access when prompted. **Scan Workspace** captures a real Raven Camera frame and sends it to the configured vision model. Every item is reported as **Found**, **Not visible**, or **Uncertain**. You can confirm an item manually, rescan, or explicitly choose **Continue with Gaps**. If camera capture or vision fails, the app reports the failure and offers **Demo Mode** as a separate action.
+
+Select **Voice command** to record, then **Stop listening** to transcribe. Commands include “Next,” “Back,” “Repeat,” “Skip,” “Skip wait,” “Resume,” “Start timer,” “Pause timer,” “Resume timer,” “Cancel timer,” and “Open Sudoku.” The puzzle also accepts “Box one,” “Row one column three,” “Enter four,” “Erase,” and “Check board.”
+
+Simulator speech through Raven Speaker can require the optional audio extra:
+
+```sh
+.venv/bin/python -m pip install -e '../raven-framework[audio-simulator]'
+```
+
+## Camera preview prototype
+
+From any tutorial step, select **Camera Preview** and center one nail near the crosshair. OpenCV looks for a plausible elliptical contour, follows its image position between detections by matching a local template, and clips a translucent design to the estimated nail region. The preview is processed locally. Low contrast, glare, movement out of frame, or similarly shaped objects can cause loss or a false candidate. **Back to Guide** always restores the illustrated instruction.
+
+The [Raven SDK](https://github.com/RavenResonance/raven-framework#peripherals) exposes camera frames, gaze coordinates, and IMU readings. Its hand gesture helper works in camera-image coordinates. The public interfaces I inspected supply no documented camera-to-eye calibration or world-anchor pipeline. Holding a design on the physical nail would require a calibrated camera-to-display mapping and reliable nail depth or pose. The prototype draws inside a camera image and has no optical registration.
+
+For device deployment, set `RAVEN_APP_ID` and `RAVEN_APP_KEY` and use Raven’s documented `deploy` command.
+
+## Sudoku and verification
+
+Select a 3×3 box, then an enlarged cell and one of the nine digits. **Erase** clears an editable cell. **Check Board** identifies incorrect entries. Original clues, entries, the selected box and cell, and elapsed play time are stored locally in `~/.local/share/nailpilot/sudoku-v1.json`. The original save location is retained so existing boards load after the rename. Set `NAIL_AR_SAVE_PATH` to use a separate board, such as for a demo. Moves save immediately and elapsed play time is checkpointed every two seconds while the puzzle is open.
+
+```sh
+.venv/bin/python -m unittest discover -s tests -v
+```
+
+Tests cover the unique solution, save and restore, repeated drying breaks, timer controls and navigation, scan status handling, frame handoff, tracker fallback, and viewport bounds at runtime size and at 720×720.
+
+## Live demo for judges
+
+1. Launch with `--demo --narrate`. Choose **Daisy Dreams**, then **Demo Mode** to show sample inventory. Confirm uncertain items or explicitly continue with gaps.
+2. Open **Camera Preview** from a tutorial step to see the local camera feed. Center one nail, then return to the illustrated guide whether or not a candidate is detected.
+3. At a drying step, open **Drying Options**. Start the optional timer and choose **Play Sudoku**. Select box 1, row 1 column 3, then enter **4**. Back out and choose **Skip Wait**. Reopen Sudoku from the next step and show that the move and selection were saved.
+4. Keep advancing while the timer runs. The timer ends with a small notification and leaves the current screen in place.
+
+---
+
 # Raven Starter Project
 
 <img src="assets/documentation/logo/horizontal.png" width="100%" alt="Raven Framework Logo">

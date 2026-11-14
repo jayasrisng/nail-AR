@@ -1,0 +1,2 @@
+# Clone the framework beside this repository before installing.
+-e ../raven-framework
