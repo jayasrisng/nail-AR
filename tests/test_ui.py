@@ -12,6 +12,7 @@ from PySide6.QtWidgets import QApplication, QLabel
 from raven_framework import Button
 
 from nail_ar.app import NailAR
+from nail_ar.board import SudokuBoard
 from nail_ar.session import Screen
 from test_session import FakeClock
 
@@ -115,6 +116,9 @@ class SimulatorUITest(unittest.TestCase):
         self.click("Start Timer")
         deadline = model.deadline
         self.click("Play Sudoku")
+        board = self.app.page.findChild(SudokuBoard)
+        self.assertIsNotNone(board)
+        self.assertEqual(len(board.game.cells), 81)
         self.click("Box 1")
         self.click("Row 1, column 3")
         self.click("9")
@@ -122,6 +126,10 @@ class SimulatorUITest(unittest.TestCase):
         self.assertEqual(model.game.errors, {2})
         self.click("Erase")
         self.voice("enter four")
+        self.click("Full Board")
+        self.assertEqual(model.game.selected, 2)
+        self.click("Box 1")
+        self.assertEqual(model.game.selected, 2)
         self.click("Back")
         self.click("Skip Wait")
         self.assertEqual(model.deadline, deadline)

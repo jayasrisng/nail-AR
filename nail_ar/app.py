@@ -12,6 +12,7 @@ from PySide6.QtWidgets import QApplication, QLabel, QLineEdit, QWidget
 from raven_framework import Button, RavenApp
 from raven_framework.helpers.font_utils import create_font
 
+from .board import SudokuBoard
 from .designs import DESIGNS
 from .illustrations import NailArt, Sparkles
 from .preview import CameraPreview
@@ -62,6 +63,7 @@ class NailAR(RavenApp):
         self.timer_finished = False
         self.last_save = self.model.clock()
         self.check_errors = False
+        self.sudoku_overview = True
         self.notice = ""
         self.speech_version = 0
         self.local_speech = None
@@ -148,20 +150,21 @@ class NailAR(RavenApp):
         return self.place(label, x, y, w, h)
 
     def button(self, title, callback, x, y, w, h=56, *, primary=False, active=False,
-               enabled=True, size=20, content=None):
+               enabled=True, size=20, content=None, transparent=False):
         size_px = self.geometry_for(0, 0, w, h).size()
         button = Button(
             center_text=title, width=size_px.width(), height=size_px.height(),
             text_size=self.font_size(size), content_widget=content,
             text_color=PINK if primary else CREAM, font_weight="bold", font="inter", corner_radius=16,
-            background_color="#392238" if primary else "#221a2e",
+            background_color="transparent" if transparent else "#392238" if primary else "#221a2e",
             outline_color=PINK if primary or active else LILAC, outline_width=2,
-            dwell_background_outline_color=("#e8acd1" if primary or active else "#685375"),
+            dwell_background_outline_color=("transparent" if transparent else
+                                            "#e8acd1" if primary or active else "#685375"),
             scale_by=0, disabled=not enabled, use_gradient_border=False,
             enable_quad_dwell=True, use_fill_dwell=False,
         )
         button.setFixedSize(size_px)
-        button.setAccessibleName(title or content.accessibleName())
+        button.setAccessibleName(title or (content.accessibleName() if content else ""))
         button.on_clicked(callback)
         return self.place(button, x, y, w, h)
 
@@ -507,33 +510,42 @@ class NailAR(RavenApp):
 
     def open_sudoku(self):
         self.check_errors = False
+        self.sudoku_overview = True
         self.navigate(self.model.play)
+
+    def zoom_box(self, box):
+        if not self.model.game.solved:
+            self.model.game.choose_box(box)
+            self.sudoku_overview = False
+            self.draw()
+
+    def show_board(self):
+        self.sudoku_overview = True
+        self.draw()
 
     def sudoku(self):
         game = self.model.game
-        title = "Sudoku complete" if game.solved else "Choose a box" if game.box is None else f"Box {game.box + 1} of 9"
+        overview = self.sudoku_overview or game.box is None or game.solved
+        title = "Sudoku complete" if game.solved else "9 × 9 Sudoku" if overview else f"Sudoku · Box {game.box + 1}"
         self.header("NAIL AR / SUDOKU", title)
         if game.solved:
             instruction = f"Solved in {time_text(int(game.playtime))}."
-        elif game.box is None:
-            instruction = "Zoom into one 3×3 box to play."
+        elif overview:
+            instruction = "Select a 3×3 box to zoom in."
         elif game.selected is None:
             instruction = "Choose an empty or editable cell."
         else:
             row, col = divmod(game.selected, 9)
             instruction = f"Row {row + 1}, column {col + 1} · choose a number."
-        self.label(instruction, 28, 112, 584, 48, 23, MUTED)
-        if game.box is None:
-            for box in range(9):
-                row, col = divmod(box, 3)
-                values = [str(game.cells[i]) if game.cells[i] else "·" for i in box_cells(box)]
-                content = QLabel("\n".join("   ".join(values[i:i + 3]) for i in range(0, 9, 3)))
-                content.setAccessibleName(f"Box {box + 1}")
-                content.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                content.setStyleSheet(f"color:{CREAM};font-size:{self.font_size(21)}px;")
-                content.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-                self.button("", partial(self.act, partial(game.choose_box, box)), 112 + col * 140,
-                            167 + row * 112, 132, 103, content=content)
+        self.label(instruction, 28, 112, 584, 45, 23, MUTED)
+        if overview:
+            self.place(SudokuBoard(game, self.check_errors), 143, 158, 354, 354)
+            if not game.solved:
+                for box in range(9):
+                    row, col = divmod(box, 3)
+                    button = self.button("", partial(self.zoom_box, box), 143 + col * 118,
+                                         158 + row * 118, 118, 118, transparent=True)
+                    button.setAccessibleName(f"Box {box + 1}")
         else:
             for local, cell in enumerate(box_cells(game.box)):
                 row, col = divmod(local, 3)
@@ -551,7 +563,7 @@ class NailAR(RavenApp):
                             193 + row * 93, 85, 83, enabled=game.selected is not None and not game.solved, size=29)
             self.button("Erase", partial(self.enter_number, 0), 447, 474, 165, 55,
                         enabled=game.selected is not None and not game.solved)
-            self.button("All Boxes", partial(self.act, partial(game.choose_box, None)), 28, 474, 181, 55)
+            self.button("Full Board", self.show_board, 28, 474, 181, 55)
         self.button("Back", partial(self.navigate, self.model.back), 28, 536, 151, 52)
         self.button("Check Board", self.verify_puzzle, 386, 536, 226, 52)
 
@@ -596,12 +608,19 @@ class NailAR(RavenApp):
 
     def preview_screen(self):
         self.header("NAIL AR / EXPERIMENT", "Camera preview",
-                    "Center one fingernail within the crosshair.")
+                    "Hold one nail upright in bright, even light.")
         self.preview_picture = self.place(QLabel(), 28, 168, 584, 318)
         self.preview_picture.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.preview_caption = self.label("", 28, 490, 584, 42, 19, MUTED)
         self.last_preview_frame = None
-        self.button("Back to Guide", partial(self.navigate, self.model.back), 326, 536, 286, 53)
+        self.button("Back to Guide", partial(self.navigate, self.model.back), 28, 536, 190, 53)
+        self.button("−", partial(self.preview_action, -.035), 232, 536, 66, 53, size=26).setAccessibleName("Smaller outline")
+        self.button("+", partial(self.preview_action, .035), 312, 536, 66, 53, size=26).setAccessibleName("Larger outline")
+        self.button("Lock Nail", partial(self.preview_action, "lock"), 393, 536, 219, 53, primary=True)
+
+    def preview_action(self, action):
+        if self.preview and self.preview.latest is not None:
+            self.preview.actions.put(action)
 
     def refresh_preview(self):
         preview = self.preview
@@ -736,13 +755,13 @@ class NailAR(RavenApp):
             box = re.fullmatch(r"(?:box|choose box) (\w+)", command)
             cell = re.fullmatch(r"row (\w+) column (\w+)", command)
             if box and numbers.get(box[1], box[1]) in tuple("123456789"):
-                self.act(partial(model.game.choose_box, int(numbers.get(box[1], box[1])) - 1))
+                self.zoom_box(int(numbers.get(box[1], box[1])) - 1)
                 return
             if cell:
                 row, col = (numbers.get(value, value) for value in cell.groups())
                 if row in tuple("123456789") and col in tuple("123456789"):
                     index = (int(row) - 1) * 9 + int(col) - 1
-                    model.game.choose_box(box_for(index))
+                    self.zoom_box(box_for(index))
                     self.act(partial(model.game.select, index))
                     return
             if command in ("check", "check board"):
@@ -753,6 +772,9 @@ class NailAR(RavenApp):
             return
         if command == "continue" and screen is Screen.SUPPLY_CONFIRMATION and model.ready:
             self.act(model.begin, READY_LINE)
+            return
+        if screen is Screen.PREVIEW and command in ("lock nail", "smaller outline", "larger outline"):
+            self.preview_action({"lock nail": "lock", "smaller outline": -.035, "larger outline": .035}[command])
             return
         if command == "skip" and screen in (Screen.PREVIEW, Screen.SUDOKU):
             self.navigate(model.back)

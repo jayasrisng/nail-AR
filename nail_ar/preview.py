@@ -1,6 +1,6 @@
 from math import hypot
+from queue import Empty, SimpleQueue
 from threading import Event
-from time import monotonic
 
 import cv2
 import numpy as np
@@ -13,7 +13,7 @@ class NailTracker:
         self.anchor = None
         self.template = None
         self.box = None
-        self.last_detection = 0
+        self.assisted = False
 
     def locate(self, gray, center):
         height, width = gray.shape
@@ -21,7 +21,9 @@ class NailTracker:
         extent = min(width, height) // 4
         x, y = max(0, cx - extent), max(0, cy - extent)
         crop = gray[y:cy + extent, x:cx + extent]
-        edges = cv2.Canny(cv2.GaussianBlur(crop, (5, 5), 0), 32, 92)
+        smoothed = cv2.GaussianBlur(crop, (5, 5), 0)
+        enhanced = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(4, 4)).apply(smoothed)
+        edges = cv2.Canny(enhanced, 26, 78)
         edges = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, np.ones((5, 5), np.uint8))
         contours, _ = cv2.findContours(edges, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
         matches = []
@@ -38,40 +40,64 @@ class NailTracker:
                 matches.append((distance, ((dx + x, dy + y), axes, angle)))
         return min(matches, key=lambda item: item[0])[1] if matches else None
 
-    def update(self, gray):
-        height, width = gray.shape
-        now = monotonic()
-        center = (width // 2, height // 2)
-        if self.template is not None:
-            x, y = self.anchor
-            h, w = self.template.shape
-            pad = min(width, height) // 9
-            left, top = max(0, x - pad), max(0, y - pad)
-            search = gray[top:y + h + pad, left:x + w + pad]
-            scores = cv2.matchTemplate(search, self.template, cv2.TM_CCOEFF_NORMED)
-            _, score, _, (dx, dy) = cv2.minMaxLoc(scores)
-            if score >= .68:
-                new_x, new_y = left + dx, top + dy
-                (cx, cy), axes, angle = self.box
-                center = (round(cx + new_x - x), round(cy + new_y - y))
-                self.box = (center, axes, angle)
-                self.anchor = (new_x, new_y)
-                if now - self.last_detection < .7:
-                    return self.box
-            else:
-                self.box = self.template = None
-        found = self.locate(gray, center)
-        if found is None:
+    def acquire(self, gray, guide):
+        center, axes, _ = guide
+        self.assisted = True
+        contour = self.locate(gray, center)
+        if contour is not None:
+            location, candidate_axes, _ = contour
+            if (hypot(location[0] - center[0], location[1] - center[1]) < axes[0] * .22
+                    and all(.65 < measured / expected < 1.35
+                            for measured, expected in zip(sorted(candidate_axes), sorted(axes)))):
+                guide = contour
+        return self.store(gray, guide)
+
+    def store(self, gray, region):
+        (cx, cy), axes, _ = region
+        radius = max(8, int(max(axes) * .70))
+        x, y = max(0, int(cx) - radius), max(0, int(cy) - radius)
+        sample = gray[y:int(cy) + radius, x:int(cx) + radius]
+        if sample.size == 0 or sample.std() < 5:
             self.box = self.template = None
             return None
-        self.box = found
-        self.last_detection = now
-        (cx, cy), axes, _ = found
-        radius = max(8, int(max(axes) * .38))
-        x, y = max(0, int(cx) - radius), max(0, int(cy) - radius)
-        self.template = gray[y:int(cy) + radius, x:int(cx) + radius].copy()
+        self.template = sample.copy()
         self.anchor = (x, y)
-        return found
+        self.box = region
+        return region
+
+    def update(self, gray):
+        if self.template is None:
+            return None
+        x, y = self.anchor
+        h, w = self.template.shape
+        pad = min(gray.shape) // 8
+        left, top = max(0, x - pad), max(0, y - pad)
+        search = gray[top:y + h + pad, left:x + w + pad]
+        scores = cv2.matchTemplate(search, self.template, cv2.TM_CCOEFF_NORMED)
+        _, score, _, (dx, dy) = cv2.minMaxLoc(scores)
+        if score < .72:
+            self.box = self.template = None
+            return None
+        new_x, new_y = left + dx, top + dy
+        (cx, cy), axes, angle = self.box
+        self.box = ((round(cx + new_x - x), round(cy + new_y - y)), axes, angle)
+        self.anchor = (new_x, new_y)
+        return self.box
+
+
+def nail_guide(shape, size):
+    height, width = shape[:2]
+    breadth = max(16, round(min(width, height) * size))
+    return (width // 2, height // 2), (breadth, round(breadth * 1.5)), 0
+
+
+def draw_guide(frame, guide):
+    output = frame.copy()
+    center, axes, angle = guide
+    cv2.ellipse(output, center, tuple(v // 2 for v in axes), angle,
+                0, 360, (220, 205, 250), 2, cv2.LINE_AA)
+    cv2.drawMarker(output, center, (220, 205, 250), cv2.MARKER_CROSS, 16, 1, cv2.LINE_AA)
+    return output
 
 
 def composite(frame, design, region):
@@ -112,6 +138,7 @@ class CameraPreview:
     def __init__(self, services, design):
         self.services, self.design = services, design
         self.stop = Event()
+        self.actions = SimpleQueue()
         self.latest = None
         self.status = "Opening Raven camera…"
 
@@ -128,6 +155,7 @@ class CameraPreview:
                     return
                 tracker = NailTracker()
                 misses = 0
+                size = .19
                 while not self.stop.is_set():
                     frame = camera.capture_camera_image()
                     if frame is None or not frame.size:
@@ -140,10 +168,31 @@ class CameraPreview:
                         scale = min(1, 640 / max(frame.shape[:2]))
                         frame = cv2.resize(frame, None, fx=scale, fy=scale)
                         try:
-                            region = tracker.update(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY))
-                            rendered = composite(frame, self.design, region)
-                            status = ("One candidate tracked · image preview" if region else
-                                      "Center one fingernail in good light.")
+                            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                            lock = False
+                            while True:
+                                try:
+                                    action = self.actions.get_nowait()
+                                except Empty:
+                                    break
+                                if action == "lock":
+                                    lock = True
+                                else:
+                                    size = min(.32, max(.10, size + action))
+                                    tracker = NailTracker()
+                                    lock = False
+                            guide = nail_guide(frame.shape, size)
+                            if lock:
+                                region = tracker.acquire(gray, guide)
+                            else:
+                                region = tracker.update(gray) if tracker.assisted else None
+                            if region:
+                                rendered = composite(frame, self.design, region)
+                                status = "Tracking the selected area · move slowly."
+                            else:
+                                rendered = draw_guide(frame, guide)
+                                status = ("Tracking lost · align and Lock Nail again."
+                                          if tracker.assisted else "Align your nail with the outline, then select Lock Nail.")
                         except (cv2.error, ValueError):
                             tracker = NailTracker()
                             rendered, status = frame, "Tracking lost · reposition your hand."

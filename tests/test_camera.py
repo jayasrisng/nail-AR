@@ -5,7 +5,7 @@ import cv2
 import numpy as np
 
 from nail_ar.designs import DESIGNS
-from nail_ar.preview import CameraPreview, NailTracker, composite
+from nail_ar.preview import CameraPreview, NailTracker, composite, nail_guide
 from nail_ar.services import Services, demo_scan, parse_inventory
 from nail_ar.session import Inventory
 
@@ -63,7 +63,7 @@ class CameraTests(TestCase):
         for dx, dy in ((0, 0), (14, -8), (28, -16)):
             gray = np.zeros((240, 320), np.uint8)
             cv2.ellipse(gray, (160 + dx, 120 + dy), (24, 36), 0, 0, 360, 180, -1)
-            region = tracker.update(gray)
+            region = tracker.acquire(gray, nail_guide(gray.shape, .2)) if dx == dy == 0 else tracker.update(gray)
             self.assertIsNotNone(region)
             self.assertLess(abs(region[0][0] - 160 - dx), 3)
             frame = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
@@ -71,6 +71,8 @@ class CameraTests(TestCase):
             self.assertFalse(np.array_equal(frame, output))
             self.assertTrue(np.array_equal(frame[0], output[0]))
         self.assertIsNone(tracker.update(np.zeros_like(gray)))
+        self.assertIsNone(tracker.update(gray))
+        self.assertIsNone(tracker.acquire(np.zeros_like(gray), nail_guide(gray.shape, .2)))
 
     def test_tracking_exception_keeps_camera_preview_available(self):
         frame = np.zeros((90, 120, 3), np.uint8)
@@ -81,7 +83,8 @@ class CameraTests(TestCase):
             preview.stop.set()
             return frame
         camera.capture_camera_image.side_effect = get_frame
-        with patch.object(NailTracker, "update", side_effect=cv2.error("bad tracking")):
+        preview.actions.put("lock")
+        with patch.object(NailTracker, "acquire", side_effect=cv2.error("bad tracking")):
             preview.run()
         self.assertIn("Tracking lost", preview.latest[1])
         camera.close_camera.assert_called_once()

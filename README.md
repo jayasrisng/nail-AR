@@ -39,7 +39,7 @@ Simulator speech through Raven Speaker can require the optional audio extra:
 
 ## Camera preview prototype
 
-From any tutorial step, select **Camera Preview** and center one nail near the crosshair. OpenCV looks for a plausible elliptical contour, follows its image position between detections by matching a local template, and clips a translucent design to the estimated nail region. The preview is processed locally. Low contrast, glare, movement out of frame, or similarly shaped objects can cause loss or a false candidate. **Back to Guide** always restores the illustrated instruction.
+From any tutorial step, select **Camera Preview**. In bright, even light, hold one nail upright and align it with the oval. Use **−** or **+** to resize the oval, then select **Lock Nail**. OpenCV uses a nearby contour if it fits the guide and otherwise starts from the oval you aligned. Move slowly and re-lock if the guide loses tracking. This follows a selected region in the camera image, and overlay placement is approximate. **Back to Guide** always restores the illustrated instruction.
 
 The [Raven SDK](https://github.com/RavenResonance/raven-framework#peripherals) exposes camera frames, gaze coordinates, and IMU readings. Its hand gesture helper works in camera-image coordinates. The public interfaces I inspected supply no documented camera-to-eye calibration or world-anchor pipeline. Holding a design on the physical nail would require a calibrated camera-to-display mapping and reliable nail depth or pose. The prototype draws inside a camera image and has no optical registration.
 
@@ -47,7 +47,7 @@ For device deployment, set `RAVEN_APP_ID` and `RAVEN_APP_KEY` and use Raven’s 
 
 ## Sudoku and verification
 
-Select a 3×3 box, then an enlarged cell and one of the nine digits. **Erase** clears an editable cell. **Check Board** identifies incorrect entries. Original clues, entries, the selected box and cell, and elapsed play time are stored locally in `~/.local/share/nailpilot/sudoku-v1.json`. The original save location is retained so existing boards load after the rename. Set `NAIL_AR_SAVE_PATH` to use a separate board, such as for a demo. Moves save immediately and elapsed play time is checkpointed every two seconds while the puzzle is open.
+Sudoku opens with all 81 cells in one 9×9 board. Select a 3×3 box, then an enlarged cell and one of the nine digits. Select **Full Board** to zoom back out. **Erase** clears an editable cell. **Check Board** identifies incorrect entries. Original clues, entries, the selected box and cell, and elapsed play time are stored locally in `~/.local/share/nailpilot/sudoku-v1.json`. The original save location is retained so existing boards load after the rename. Set `NAIL_AR_SAVE_PATH` to use a separate board, such as for a demo. Moves save immediately and elapsed play time is checkpointed every two seconds while the puzzle is open.
 
 ```sh
 .venv/bin/python -m unittest discover -s tests -v
