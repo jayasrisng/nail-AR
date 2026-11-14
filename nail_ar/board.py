@@ -3,11 +3,8 @@ from PySide6.QtGui import QColor, QPainter, QPen
 from PySide6.QtWidgets import QWidget
 from raven_framework.helpers.font_utils import create_font
 
-from .sudoku import box_for
-
-
 class SudokuBoard(QWidget):
-    """Paint all 81 cells as one board; Raven buttons handle the nine box targets."""
+    """Paint all 81 cells as one board; Raven buttons handle individual editable cells."""
 
     def __init__(self, game, check_errors):
         super().__init__()
@@ -26,8 +23,6 @@ class SudokuBoard(QWidget):
             cell = QRectF(col * width, row * height, width, height)
             if index == self.game.selected:
                 painter.fillRect(cell, QColor("#58354e"))
-            elif box_for(index) == self.game.box:
-                painter.fillRect(cell, QColor("#30253e"))
             if digit:
                 font = create_font("inter", max(1, round(height * .57)),
                                    "bold" if self.game.givens[index] else "normal")

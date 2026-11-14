@@ -18,7 +18,7 @@ from .illustrations import NailArt, Sparkles
 from .preview import CameraPreview
 from .services import ScanResult, Services, demo_scan, normalize
 from .session import Inventory, Screen, Session
-from .sudoku import box_cells, box_for, default_path
+from .sudoku import default_path
 
 CREAM = "#fff3ec"
 PINK = "#ffc3dd"
@@ -63,7 +63,6 @@ class NailAR(RavenApp):
         self.timer_finished = False
         self.last_save = self.model.clock()
         self.check_errors = False
-        self.sudoku_overview = True
         self.notice = ""
         self.speech_version = 0
         self.local_speech = None
@@ -510,62 +509,41 @@ class NailAR(RavenApp):
 
     def open_sudoku(self):
         self.check_errors = False
-        self.sudoku_overview = True
         self.navigate(self.model.play)
-
-    def zoom_box(self, box):
-        if not self.model.game.solved:
-            self.model.game.choose_box(box)
-            self.sudoku_overview = False
-            self.draw()
-
-    def show_board(self):
-        self.sudoku_overview = True
-        self.draw()
 
     def sudoku(self):
         game = self.model.game
-        overview = self.sudoku_overview or game.box is None or game.solved
-        title = "Sudoku complete" if game.solved else "9 × 9 Sudoku" if overview else f"Sudoku · Box {game.box + 1}"
-        self.header("NAIL AR / SUDOKU", title)
+        self.header("NAIL AR / SUDOKU", "Sudoku complete" if game.solved else "9 × 9 Sudoku")
         if game.solved:
             instruction = f"Solved in {time_text(int(game.playtime))}."
-        elif overview:
-            instruction = "Select a 3×3 box to zoom in."
         elif game.selected is None:
-            instruction = "Choose an empty or editable cell."
+            instruction = "Select any open cell, then choose a number."
         else:
             row, col = divmod(game.selected, 9)
             instruction = f"Row {row + 1}, column {col + 1} · choose a number."
-        self.label(instruction, 28, 112, 584, 45, 23, MUTED)
-        if overview:
-            self.place(SudokuBoard(game, self.check_errors), 143, 158, 354, 354)
-            if not game.solved:
-                for box in range(9):
-                    row, col = divmod(box, 3)
-                    button = self.button("", partial(self.zoom_box, box), 143 + col * 118,
-                                         158 + row * 118, 118, 118, transparent=True)
-                    button.setAccessibleName(f"Box {box + 1}")
-        else:
-            for local, cell in enumerate(box_cells(game.box)):
-                row, col = divmod(local, 3)
-                value = game.cells[cell]
-                text = ("!" if self.check_errors and cell in game.errors else "") + (str(value) if value else "·")
-                button = self.button(text, partial(self.act, partial(game.select, cell)),
-                                     28 + col * 95, 193 + row * 93, 85, 83,
-                                     primary=game.selected == cell, enabled=not game.givens[cell] and not game.solved,
-                                     size=29)
-                r, c = divmod(cell, 9)
-                button.setAccessibleName(f"Row {r + 1}, column {c + 1}")
-            for digit in range(1, 10):
-                row, col = divmod(digit - 1, 3)
-                self.button(str(digit), partial(self.enter_number, digit), 330 + col * 95,
-                            193 + row * 93, 85, 83, enabled=game.selected is not None and not game.solved, size=29)
-            self.button("Erase", partial(self.enter_number, 0), 447, 474, 165, 55,
-                        enabled=game.selected is not None and not game.solved)
-            self.button("Full Board", self.show_board, 28, 474, 181, 55)
-        self.button("Back", partial(self.navigate, self.model.back), 28, 536, 151, 52)
-        self.button("Check Board", self.verify_puzzle, 386, 536, 226, 52)
+        self.label(instruction, 28, 109, 584, 39, 23, MUTED)
+
+        left, top, cell_size = 28, 154, 47
+        board_size = cell_size * 9
+        self.place(SudokuBoard(game, self.check_errors), left, top, board_size, board_size)
+        if not game.solved:
+            for index, given in enumerate(game.givens):
+                if given:
+                    continue
+                row, col = divmod(index, 9)
+                button = self.button("", partial(self.act, partial(game.select, index)),
+                                     left + col * cell_size, top + row * cell_size,
+                                     cell_size, cell_size, transparent=True)
+                button.setAccessibleName(f"Row {row + 1}, column {col + 1}")
+
+        editable = game.selected is not None and not game.solved
+        for digit in range(1, 10):
+            row, col = divmod(digit - 1, 2)
+            self.button(str(digit), partial(self.enter_number, digit), 467 + col * 75,
+                        154 + row * 55, 70, 50, enabled=editable, size=26)
+        self.button("Erase", partial(self.enter_number, 0), 542, 374, 70, 50, enabled=editable, size=17)
+        self.button("Check Board", self.verify_puzzle, 467, 454, 145, 52, size=18)
+        self.button("Back", partial(self.navigate, self.model.back), 467, 525, 145, 52)
 
     def verify_puzzle(self):
         self.check_errors = True
@@ -752,16 +730,11 @@ class NailAR(RavenApp):
             if digit in ("erase", "clear") or (len(digit) == 1 and digit in "0123456789"):
                 self.enter_number(0 if digit in ("erase", "clear") else int(digit))
                 return
-            box = re.fullmatch(r"(?:box|choose box) (\w+)", command)
             cell = re.fullmatch(r"row (\w+) column (\w+)", command)
-            if box and numbers.get(box[1], box[1]) in tuple("123456789"):
-                self.zoom_box(int(numbers.get(box[1], box[1])) - 1)
-                return
             if cell:
                 row, col = (numbers.get(value, value) for value in cell.groups())
                 if row in tuple("123456789") and col in tuple("123456789"):
                     index = (int(row) - 1) * 9 + int(col) - 1
-                    self.zoom_box(box_for(index))
                     self.act(partial(model.game.select, index))
                     return
             if command in ("check", "check board"):

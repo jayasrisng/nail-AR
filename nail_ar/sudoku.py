@@ -3,7 +3,6 @@ import os
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
-DIGITS = "123456789"
 GIVENS = tuple(map(int, (
     "530070000"
     "600195000"
@@ -20,12 +19,6 @@ GIVENS = tuple(map(int, (
 def box_for(index):
     row, col = divmod(index, 9)
     return row // 3 * 3 + col // 3
-
-
-def box_cells(box):
-    row, col = divmod(box, 3)
-    start = row * 27 + col * 3
-    return tuple(start + y * 9 + x for y in range(3) for x in range(3))
 
 
 PEERS = tuple(frozenset(
@@ -73,7 +66,7 @@ class Sudoku:
         self.path = Path(path) if path is not None else None
         self.givens = GIVENS
         self.cells = list(GIVENS)
-        self.box = self.selected = None
+        self.selected = None
         self.elapsed = 0.0
         self.joined = None
         self.save_error = False
@@ -95,11 +88,9 @@ class Sudoku:
             if type(elapsed) in (int, float) and 0 <= elapsed < float("inf"):
                 self.elapsed = elapsed
             self.cells = cells
-            box, selected = data.get("box"), data.get("selected")
-            if type(box) is int and 0 <= box < 9:
-                self.box = box
-                if type(selected) is int and selected in box_cells(box) and not GIVENS[selected]:
-                    self.selected = selected
+            selected = data.get("selected")
+            if type(selected) is int and 0 <= selected < 81 and not GIVENS[selected]:
+                self.selected = selected
         except (OSError, ValueError, KeyError):
             return
 
@@ -115,7 +106,7 @@ class Sudoku:
             self.path.parent.mkdir(parents=True, exist_ok=True)
             with NamedTemporaryFile(mode="w", dir=self.path.parent, delete=False) as stream:
                 temp = Path(stream.name)
-                json.dump(dict(givens=self.givens, cells=self.cells, box=self.box,
+                json.dump(dict(givens=self.givens, cells=self.cells,
                                selected=self.selected, elapsed=self.playtime), stream)
             temp.replace(self.path)
             self.save_error = False
@@ -137,13 +128,8 @@ class Sudoku:
         self.joined = None
         self.save()
 
-    def choose_box(self, box):
-        if box != self.box:
-            self.box, self.selected = box, None
-            self.save()
-
     def select(self, index):
-        if self.box is not None and index in box_cells(self.box) and not self.givens[index]:
+        if 0 <= index < 81 and not self.givens[index] and not self.solved:
             self.selected = index
             self.save()
 

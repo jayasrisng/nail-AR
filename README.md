@@ -29,7 +29,7 @@ On Windows, use `py -m venv .venv` and substitute `.venv\Scripts\python.exe` for
 
 Set `OPENAI_API_KEY` in your environment, then run `.venv/bin/python main.py --narrate`. Set `NAIL_AR_VISION_MODEL` if you want a different image-capable model. Grant camera and microphone access when prompted. **Scan Workspace** captures a real Raven Camera frame and sends it to the configured vision model. Every item is reported as **Found**, **Not visible**, or **Uncertain**. You can confirm an item manually, rescan, or explicitly choose **Continue with Gaps**. If camera capture or vision fails, the app reports the failure and offers **Demo Mode** as a separate action.
 
-Select **Voice command** to record, then **Stop listening** to transcribe. Commands include “Next,” “Back,” “Repeat,” “Skip,” “Skip wait,” “Resume,” “Start timer,” “Pause timer,” “Resume timer,” “Cancel timer,” and “Open Sudoku.” The puzzle also accepts “Box one,” “Row one column three,” “Enter four,” “Erase,” and “Check board.”
+Select **Voice command** to record, then **Stop listening** to transcribe. Commands include “Next,” “Back,” “Repeat,” “Skip,” “Skip wait,” “Resume,” “Start timer,” “Pause timer,” “Resume timer,” “Cancel timer,” and “Open Sudoku.” The puzzle also accepts “Row one column three,” “Enter four,” “Erase,” and “Check board.”
 
 Simulator speech through Raven Speaker can require the optional audio extra:
 
@@ -47,7 +47,7 @@ For device deployment, set `RAVEN_APP_ID` and `RAVEN_APP_KEY` and use Raven’s 
 
 ## Sudoku and verification
 
-Sudoku opens with all 81 cells in one 9×9 board. Select a 3×3 box, then an enlarged cell and one of the nine digits. Select **Full Board** to zoom back out. **Erase** clears an editable cell. **Check Board** identifies incorrect entries. Original clues, entries, the selected box and cell, and elapsed play time are stored locally in `~/.local/share/nailpilot/sudoku-v1.json`. The original save location is retained so existing boards load after the rename. Set `NAIL_AR_SAVE_PATH` to use a separate board, such as for a demo. Moves save immediately and elapsed play time is checkpointed every two seconds while the puzzle is open.
+All 81 cells and the number pad stay visible throughout the game. Select any editable cell directly, then choose a digit. **Erase** clears an editable cell. **Check Board** identifies incorrect entries. Original clues, entries, the selected cell, and elapsed play time are stored locally in `~/.local/share/nailpilot/sudoku-v1.json`. The original save location is retained so existing boards load after the rename. Set `NAIL_AR_SAVE_PATH` to use a separate board, such as for a demo. Moves save immediately and elapsed play time is checkpointed every two seconds while the puzzle is open.
 
 ```sh
 .venv/bin/python -m unittest discover -s tests -v
@@ -59,7 +59,7 @@ Tests cover the unique solution, save and restore, repeated drying breaks, timer
 
 1. Launch with `--demo --narrate`. Choose **Daisy Dreams**, then **Demo Mode** to show sample inventory. Confirm uncertain items or explicitly continue with gaps.
 2. Open **Camera Preview** from a tutorial step to see the local camera feed. Center one nail, then return to the illustrated guide whether or not a candidate is detected.
-3. At a drying step, open **Drying Options**. Start the optional timer and choose **Play Sudoku**. Select box 1, row 1 column 3, then enter **4**. Back out and choose **Skip Wait**. Reopen Sudoku from the next step and show that the move and selection were saved.
+3. At a drying step, open **Drying Options**. Start the optional timer and choose **Play Sudoku**. Select row 1 column 3 directly on the board, then enter **4**. Back out and choose **Skip Wait**. Reopen Sudoku from the next step and show that the move and selection were saved.
 4. Keep advancing while the timer runs. The timer ends with a small notification and leaves the current screen in place.
 
 ---

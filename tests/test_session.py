@@ -4,7 +4,7 @@ import unittest
 
 from nail_ar.designs import DESIGNS
 from nail_ar.session import Inventory, Screen, Session
-from nail_ar.sudoku import GIVENS, SOLUTION, Sudoku, box_for, solve
+from nail_ar.sudoku import GIVENS, SOLUTION, Sudoku, solve
 
 
 class FakeClock:
@@ -83,7 +83,6 @@ class SessionTests(unittest.TestCase):
         deadline = model.deadline
         model.play()
         game = model.game
-        game.choose_box(0)
         game.select(2)
         game.enter(4)
         self.clock.now += 3
@@ -98,7 +97,7 @@ class SessionTests(unittest.TestCase):
         self.assertEqual(model.deadline, deadline)
         model.play()
         self.assertIs(model.game, game)
-        self.assertEqual((game.box, game.selected, game.cells[2]), (0, 2, 4))
+        self.assertEqual((game.selected, game.cells[2]), (2, 4))
         self.clock.now += 12
         self.assertTrue(model.tick())
         self.assertIs(model.screen, Screen.SUDOKU)
@@ -132,7 +131,6 @@ class SudokuTests(unittest.TestCase):
         game = Sudoku(FakeClock())
         for index, digit in enumerate(SOLUTION):
             if not GIVENS[index]:
-                game.choose_box(box_for(index))
                 game.select(index)
                 game.enter(digit)
         self.assertTrue(game.solved)
@@ -144,7 +142,6 @@ class SudokuTests(unittest.TestCase):
             path = Path(directory) / "game.json"
             game = Sudoku(clock, path)
             game.open()
-            game.choose_box(0)
             game.select(0)
             self.assertIsNone(game.selected)
             game.select(2)
@@ -156,7 +153,6 @@ class SudokuTests(unittest.TestCase):
             self.assertEqual(restored.givens, GIVENS)
             self.assertEqual(restored.cells, game.cells)
             self.assertEqual(restored.selected, 2)
-            self.assertEqual(restored.box, 0)
             self.assertEqual(restored.playtime, 6)
             restored.enter(0)
             self.assertFalse(Sudoku(clock, path).errors)
